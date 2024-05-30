@@ -17,6 +17,7 @@ vpmPostDict = IOdictionary(dictIO);
 bool Q_Output( vpmPostDict.lookupOrDefault<bool>("Q", false) );
 bool Omega_Output( vpmPostDict.lookupOrDefault<bool>("Omega", false) );
 bool U_Output( vpmPostDict.lookupOrDefault<bool>("U", false) );
+label Dimension( vpmPostDict.lookupOrDefault<label>("dimension", 3) );
 
 if (!Q_Output && !Omega_Output && !U_Output)
 {
