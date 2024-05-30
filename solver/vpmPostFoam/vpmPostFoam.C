@@ -53,6 +53,26 @@ int main(int argc, char *argv[])
     #include "setRootCase.H"
     #include "createTime.H"
     #include "createMesh.H"
+    #include "vpmPostDict.H"
+
+    label noe=mesh.nCells();
+    labelListList mixFaceLabels(noe);
+    labelListList mixVertLabels(noe);
+    labelList mixMeshType(noe);
+
+    if(Dimension==2)
+    {
+        #include "cellMatch2d.H"
+    }
+    else if(Dimension==3)
+    {
+        #include "cellMatch3d.H"
+    }
+    else
+    {
+        WarningInFunction << "The number of dimensions is wrong, it can only be 2D or 3D.";
+        exit(1);
+    }
 
     #include "boundarySearch.H"
 
@@ -63,8 +83,6 @@ int main(int argc, char *argv[])
     #include "leastSqureSVD.H"
 
     #include "fields.H"
-
-    #include "vpmPostDict.H"
 
     instantList timeDirs = timeSelector::select
     (
@@ -92,7 +110,7 @@ int main(int argc, char *argv[])
             const labelList& cCells =  mesh.cellCells()[cellI];
             forAll(cCells, cCellI)
             {
-                vector xx = U[cCells[cCellI]] - U[cellI];
+                vector xx = Ud[cCells[cCellI]] - Ud[cellI];
                 vector gd = mesh.C()[cCells[cCellI]] - mesh.C()[cellI];
                 doubleScalar dd[9]={gd[0],gd[1],gd[2],gd[0]*gd[0],gd[1]*gd[1],gd[2]*gd[2],gd[0]*gd[1],gd[0]*gd[2],gd[1]*gd[2]};
                 vector ddx, ddy, ddz;
@@ -108,7 +126,7 @@ int main(int argc, char *argv[])
 
             forAll(cPoints,cPointI)
             {
-                vector xx = Up[cPoints[cPointI]] - U[cellI];
+                vector xx = Up[cPoints[cPointI]] - Ud[cellI];
                 vector gd=mesh.points()[cPoints[cPointI]]-mesh.C()[cellI];
                 doubleScalar dd[9]={gd[0],gd[1],gd[2],gd[0]*gd[0],gd[1]*gd[1],gd[2]*gd[2],gd[0]*gd[1],gd[0]*gd[2],gd[1]*gd[2]};
                 vector ddx, ddy, ddz;
@@ -133,7 +151,7 @@ int main(int argc, char *argv[])
             const labelList& pPoints=mesh.pointPoints()[pointI];
             forAll(pCells,pCellI)
             {
-                vector xx = U[pCells[pCellI]] - Up[pointI];
+                vector xx = Ud[pCells[pCellI]] - Up[pointI];
                 vector gd = mesh.C()[pCells[pCellI]] - mesh.points()[pointI];
                 doubleScalar dd[9]={gd[0],gd[1],gd[2],gd[0]*gd[0],gd[1]*gd[1],gd[2]*gd[2],gd[0]*gd[1],gd[0]*gd[2],gd[1]*gd[2]};
                 vector ddx, ddy, ddz;
@@ -216,7 +234,21 @@ int main(int argc, char *argv[])
         forAll(Qp,i)
         {
             vector position = mesh.points()[i];
-            outfile << position.x() << "," << position.y() << "," << position.z() << ",";
+            
+            if(Dimension==2)
+            {
+                outfile << position.x() << "," << position.y() << "," << 0.0 << ",";
+            }
+            else if(Dimension==3)
+            {
+                outfile << position.x() << "," << position.y() << "," << position.z() << ",";
+            }
+            else
+            {
+                WarningInFunction << "The number of dimensions is wrong, it can only be 2D or 3D.";
+                exit(1);
+            }
+
             if (Q_Output)
             {
                 outfile << Qp[i] << ",";
@@ -234,7 +266,21 @@ int main(int argc, char *argv[])
         forAll(Qc,i)
         {
             vector position = mesh.C()[i];
-            outfile << position.x() << "," << position.y() << "," << position.z() << ",";
+
+            if(Dimension==2)
+            {
+                outfile << position.x() << "," << position.y() << "," << 0.0 << ",";
+            }
+            else if(Dimension==3)
+            {
+                outfile << position.x() << "," << position.y() << "," << position.z() << ",";
+            }
+            else
+            {
+                WarningInFunction << "The number of dimensions is wrong, it can only be 2D or 3D.";
+                exit(1);
+            }
+            
             if (Q_Output)
             {
                 outfile << Qc[i] << ",";
@@ -245,7 +291,7 @@ int main(int argc, char *argv[])
             }
             if (U_Output)
             {
-                outfile << U[i][0] << "," << U[i][1] << "," << U[i][2] << "," << mag(U[i]);
+                outfile << Ud[i][0] << "," << Ud[i][1] << "," << Ud[i][2] << "," << mag(Ud[i]);
             }
             outfile << endl;
         }
