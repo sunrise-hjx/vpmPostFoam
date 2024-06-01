@@ -231,38 +231,59 @@ int main(int argc, char *argv[])
 
         OFstream outfile(runTime.timeName() + ".txt");
         outfile << header << endl;
-        forAll(Qp,i)
-        {
-            vector position = mesh.points()[i];
-            
-            if(Dimension==2)
-            {
-                outfile << position.x() << "," << position.y() << "," << 0.0 << ",";
-            }
-            else if(Dimension==3)
-            {
-                outfile << position.x() << "," << position.y() << "," << position.z() << ",";
-            }
-            else
-            {
-                WarningInFunction << "The number of dimensions is wrong, it can only be 2D or 3D.";
-                exit(1);
-            }
 
-            if (Q_Output)
+        if(Dimension==2)
+        {
+            for (label i = 0; i < mesh.nPoints() / 2; i++)
             {
-                outfile << Qp[i] << ",";
+                vector position = mesh.points()[i];
+                
+                outfile << position.x() << "," << position.y() << "," << 0.0 << ",";
+
+                if (Q_Output)
+                {
+                    outfile << Qp[i] << ",";
+                }
+                if (Omega_Output)
+                {
+                    outfile << OmegaP[i] << ",";
+                }
+                if (U_Output)
+                {
+                    outfile << Up[i][0] << "," << Up[i][1] << "," << Up[i][2] << "," << mag(Up[i]);
+                }
+                outfile << endl;
             }
-            if (Omega_Output)
-            {
-                outfile << OmegaP[i] << ",";
-            }
-            if (U_Output)
-            {
-                outfile << Up[i][0] << "," << Up[i][1] << "," << Up[i][2] << "," << mag(Up[i]);
-            }
-            outfile << endl;
         }
+        else if(Dimension==3)
+        {
+            forAll(Qp,i)
+            {
+                vector position = mesh.points()[i];
+                
+                outfile << position.x() << "," << position.y() << "," << position.z() << ",";
+
+                if (Q_Output)
+                {
+                    outfile << Qp[i] << ",";
+                }
+                if (Omega_Output)
+                {
+                    outfile << OmegaP[i] << ",";
+                }
+                if (U_Output)
+                {
+                    outfile << Up[i][0] << "," << Up[i][1] << "," << Up[i][2] << "," << mag(Up[i]);
+                }
+                outfile << endl;
+            }
+        }
+        else
+        {
+            WarningInFunction << "The number of dimensions is wrong, it can only be 2D or 3D.";
+            exit(1);
+        }
+
         forAll(Qc,i)
         {
             vector position = mesh.C()[i];
@@ -300,4 +321,3 @@ int main(int argc, char *argv[])
     Foam::Info << nl << "End" << nl << endl;
     return 0;
 }
-
