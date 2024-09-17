@@ -26,6 +26,7 @@
         pointMesh::New(mesh),
         dimensioned<vector>("zero",U.dimensions(),vector::zero)
     );
+    #include "createPhi.H"
 
     volVectorField Ud(U);
     if(Dimension==2)
