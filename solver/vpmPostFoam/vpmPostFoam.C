@@ -47,6 +47,16 @@ License
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
+void reverseArray(label arr[], label size) 
+{
+    for (int i = 0; i < size / 2; i++) 
+    {
+        label temp = arr[i];
+        arr[i] = arr[size - i - 1];
+        arr[size - i - 1] = temp;
+    }
+}
+
 int main(int argc, char *argv[])
 {   
     timeSelector::addOptions(true, true);
@@ -56,17 +66,125 @@ int main(int argc, char *argv[])
     #include "vpmPostDict.H"
 
     label noe=mesh.nCells();
+    label numVertex = 0;
+    label numElement = 0;
     labelListList mixFaceLabels(noe);
     labelListList mixVertLabels(noe);
     labelList mixMeshType(noe);
 
+    labelListList cellPointsType;
+
     if(Dimension==2)
     {
         #include "cellMatch2d.H"
+        #include "facePoints.H"
+
+        numVertex = mesh.nPoints() / 2;
+
+        forAll(mesh.C(),i)
+        {
+            numElement += mesh.cells()[i].size() - 2;
+        }
+        cellPointsType.setSize(numElement);
+
+        label elementCount = -1;
+        forAll(mesh.C(), i)
+        {
+            if(mixMeshType[i]==0)
+            {
+                for (label fi = 0; fi < 4; fi++)
+                {
+                    elementCount++;
+                    cellPointsType[elementCount].append(5);
+                    label faceI = mixFaceLabels[i][fi];
+                    forAll(facePoints[faceI],pi)
+                    {
+                        cellPointsType[elementCount].append(facePoints[faceI][pi]);
+                    }
+                    cellPointsType[elementCount].append(i + numVertex);
+                }
+                
+            }
+            else
+            {
+                for (label fi = 0; fi < 3; fi++)
+                {
+                    elementCount++;
+                    cellPointsType[elementCount].append(5);
+                    label faceI = mixFaceLabels[i][fi];
+                    forAll(facePoints[faceI],pi)
+                    {
+                        cellPointsType[elementCount].append(facePoints[faceI][pi]);
+                    }
+                    cellPointsType[elementCount].append(i + numVertex);
+                }
+                
+            }
+        }
     }
     else if(Dimension==3)
     {
         #include "cellMatch3d.H"
+        numVertex = mesh.nPoints();
+
+        forAll(mesh.C(),i)
+        {
+            numElement += mesh.cells()[i].size();
+        }
+        cellPointsType.setSize(numElement);
+
+        label elementCount = -1;
+        forAll(mesh.C(), i)
+        {
+            for (label fi = 0; fi < mesh.cells()[i].size(); fi++)
+            {
+                elementCount++;
+                label faceI = mesh.cells()[i][fi];
+
+                if(mesh.faces()[faceI].size()==3)
+                {
+                    cellPointsType[elementCount].append(10);
+
+                    label pointIndex[3];
+                    forAll(mesh.faces()[faceI],pi)
+                    {
+                        pointIndex[pi] = mesh.faces()[faceI][pi];
+                    }
+
+                    if(mesh.owner()[faceI] == i)
+                    {
+                        reverseArray(pointIndex, 3);
+                    }
+
+                    forAll(mesh.faces()[faceI],pi)
+                    {
+                        cellPointsType[elementCount].append(pointIndex[pi]);
+                    }
+                    cellPointsType[elementCount].append(i + numVertex);
+                }
+                else if(mesh.faces()[faceI].size()==4)
+                {
+                    cellPointsType[elementCount].append(14);
+
+                    label pointIndex[4];
+                    forAll(mesh.faces()[faceI],pi)
+                    {
+                        pointIndex[pi] = mesh.faces()[faceI][pi];
+                    }
+
+                    if(mesh.owner()[faceI] == i)
+                    {
+                        reverseArray(pointIndex, 3);
+                    }
+
+                    forAll(mesh.faces()[faceI],pi)
+                    {
+                        cellPointsType[elementCount].append(pointIndex[pi]);
+                    }
+                    cellPointsType[elementCount].append(i + numVertex);
+                }
+            }
+        }
     }
     else
     {
@@ -102,181 +220,329 @@ int main(int argc, char *argv[])
         Foam::Info << "Time = " << runTime.timeName() << Foam::nl << Foam::nl;
         #include "createFields.H"
         volTensorField gradUc(fvc::grad(U));
-        forAll(gradUc, cellI)
-        {
-            gradUc[cellI] = tensor(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
-            scalarRectangularMatrix &aSVDc = leastSquareDiffSVDc[cellI];
-            const labelList& cPoints = mesh.cellPoints()[cellI];
-            const labelList& cCells =  mesh.cellCells()[cellI];
-            forAll(cCells, cCellI)
-            {
-                vector xx = Ud[cCells[cCellI]] - Ud[cellI];
-                vector gd = mesh.C()[cCells[cCellI]] - mesh.C()[cellI];
-                doubleScalar dd[9]={gd[0],gd[1],gd[2],gd[0]*gd[0],gd[1]*gd[1],gd[2]*gd[2],gd[0]*gd[1],gd[0]*gd[2],gd[1]*gd[2]};
-                vector ddx, ddy, ddz;
-                ddx = ddy = ddz = vector::zero;
-                for (label j = 0; j < 9; j++)
-                {
-                    ddx += aSVDc[0][j] * dd[j] * xx;
-                    ddy += aSVDc[1][j] * dd[j] * xx;
-                    ddz += aSVDc[2][j] * dd[j] * xx;
-                }
-                gradUc[cellI] += tensor(ddx, ddy, ddz);
-            }
-
-            forAll(cPoints,cPointI)
-            {
-                vector xx = Up[cPoints[cPointI]] - Ud[cellI];
-                vector gd=mesh.points()[cPoints[cPointI]]-mesh.C()[cellI];
-                doubleScalar dd[9]={gd[0],gd[1],gd[2],gd[0]*gd[0],gd[1]*gd[1],gd[2]*gd[2],gd[0]*gd[1],gd[0]*gd[2],gd[1]*gd[2]};
-                vector ddx, ddy, ddz;
-                ddx = ddy = ddz = vector::zero;
-                for (label j = 0; j < 9; j++)
-                {
-                    ddx += aSVDc[0][j] * dd[j] * xx;
-                    ddy += aSVDc[1][j] * dd[j] * xx;
-                    ddz += aSVDc[2][j] * dd[j] * xx;
-                }
-                gradUc[cellI] += tensor(ddx, ddy, ddz);
-            }
-        }
-        gradUc.correctBoundaryConditions();
         UpGrad = tensor::zero;
-        forAll(Up, pointI)
+        if(Q_Output || Omega_Output || U_Output)
         {
-            if(isPatchPoint_[pointI]) continue;
-
-            scalarRectangularMatrix& aSVD = leastSquareDiffSVD[pointI];
-            const labelList& pCells=mesh.pointCells()[pointI];
-            const labelList& pPoints=mesh.pointPoints()[pointI];
-            forAll(pCells,pCellI)
+            forAll(gradUc, cellI)
             {
-                vector xx = Ud[pCells[pCellI]] - Up[pointI];
-                vector gd = mesh.C()[pCells[pCellI]] - mesh.points()[pointI];
-                doubleScalar dd[9]={gd[0],gd[1],gd[2],gd[0]*gd[0],gd[1]*gd[1],gd[2]*gd[2],gd[0]*gd[1],gd[0]*gd[2],gd[1]*gd[2]};
-                vector ddx, ddy, ddz;
-                ddx = ddy = ddz = vector::zero;
-                for (label j = 0; j < 9; j++)
+                gradUc[cellI] = tensor(0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+                scalarRectangularMatrix &aSVDc = leastSquareDiffSVDc[cellI];
+                const labelList& cPoints = mesh.cellPoints()[cellI];
+                const labelList& cCells =  mesh.cellCells()[cellI];
+                forAll(cCells, cCellI)
                 {
-                    ddx += aSVD[0][j] * dd[j] * xx;
-                    ddy += aSVD[1][j] * dd[j] * xx;
-                    ddz += aSVD[2][j] * dd[j] * xx;
+                    vector xx = Ud[cCells[cCellI]] - Ud[cellI];
+                    vector gd = mesh.C()[cCells[cCellI]] - mesh.C()[cellI];
+                    doubleScalar dd[9]={gd[0],gd[1],gd[2],gd[0]*gd[0],gd[1]*gd[1],gd[2]*gd[2],gd[0]*gd[1],gd[0]*gd[2],gd[1]*gd[2]};
+                    vector ddx, ddy, ddz;
+                    ddx = ddy = ddz = vector::zero;
+                    for (label j = 0; j < 9; j++)
+                    {
+                        ddx += aSVDc[0][j] * dd[j] * xx;
+                        ddy += aSVDc[1][j] * dd[j] * xx;
+                        ddz += aSVDc[2][j] * dd[j] * xx;
+                    }
+                    gradUc[cellI] += tensor(ddx, ddy, ddz);
                 }
-                UpGrad[pointI] += tensor(ddx, ddy, ddz);
+
+                forAll(cPoints,cPointI)
+                {
+                    vector xx = Up[cPoints[cPointI]] - Ud[cellI];
+                    vector gd=mesh.points()[cPoints[cPointI]]-mesh.C()[cellI];
+                    doubleScalar dd[9]={gd[0],gd[1],gd[2],gd[0]*gd[0],gd[1]*gd[1],gd[2]*gd[2],gd[0]*gd[1],gd[0]*gd[2],gd[1]*gd[2]};
+                    vector ddx, ddy, ddz;
+                    ddx = ddy = ddz = vector::zero;
+                    for (label j = 0; j < 9; j++)
+                    {
+                        ddx += aSVDc[0][j] * dd[j] * xx;
+                        ddy += aSVDc[1][j] * dd[j] * xx;
+                        ddz += aSVDc[2][j] * dd[j] * xx;
+                    }
+                    gradUc[cellI] += tensor(ddx, ddy, ddz);
+                }
             }
-            forAll(pPoints,pPointI)
+            gradUc.correctBoundaryConditions();
+            forAll(Up, pointI)
             {
-                vector xx = Up[pPoints[pPointI]] - Up[pointI];
-                vector gd=mesh.points()[pPoints[pPointI]]-mesh.points()[pointI];
-                doubleScalar dd[9]={gd[0],gd[1],gd[2],gd[0]*gd[0],gd[1]*gd[1],gd[2]*gd[2],gd[0]*gd[1],gd[0]*gd[2],gd[1]*gd[2]};
-                doubleScalar wc=1.0/pointPtNum[pointI][pPointI];
-                vector ddx, ddy, ddz;
-                ddx = ddy = ddz = vector::zero;
-                for (label j = 0; j < 9; j++)
+                if(isPatchPoint_[pointI]) continue;
+
+                scalarRectangularMatrix& aSVD = leastSquareDiffSVD[pointI];
+                const labelList& pCells=mesh.pointCells()[pointI];
+                const labelList& pPoints=mesh.pointPoints()[pointI];
+                forAll(pCells,pCellI)
                 {
-                    ddx += aSVD[0][j] * dd[j] * xx * wc;
-                    ddy += aSVD[1][j] * dd[j] * xx * wc;
-                    ddz += aSVD[2][j] * dd[j] * xx * wc;
+                    vector xx = Ud[pCells[pCellI]] - Up[pointI];
+                    vector gd = mesh.C()[pCells[pCellI]] - mesh.points()[pointI];
+                    doubleScalar dd[9]={gd[0],gd[1],gd[2],gd[0]*gd[0],gd[1]*gd[1],gd[2]*gd[2],gd[0]*gd[1],gd[0]*gd[2],gd[1]*gd[2]};
+                    vector ddx, ddy, ddz;
+                    ddx = ddy = ddz = vector::zero;
+                    for (label j = 0; j < 9; j++)
+                    {
+                        ddx += aSVD[0][j] * dd[j] * xx;
+                        ddy += aSVD[1][j] * dd[j] * xx;
+                        ddz += aSVD[2][j] * dd[j] * xx;
+                    }
+                    UpGrad[pointI] += tensor(ddx, ddy, ddz);
                 }
-                UpGrad[pointI] += tensor(ddx, ddy, ddz);
+                forAll(pPoints,pPointI)
+                {
+                    vector xx = Up[pPoints[pPointI]] - Up[pointI];
+                    vector gd=mesh.points()[pPoints[pPointI]]-mesh.points()[pointI];
+                    doubleScalar dd[9]={gd[0],gd[1],gd[2],gd[0]*gd[0],gd[1]*gd[1],gd[2]*gd[2],gd[0]*gd[1],gd[0]*gd[2],gd[1]*gd[2]};
+                    doubleScalar wc=1.0/pointPtNum[pointI][pPointI];
+                    vector ddx, ddy, ddz;
+                    ddx = ddy = ddz = vector::zero;
+                    for (label j = 0; j < 9; j++)
+                    {
+                        ddx += aSVD[0][j] * dd[j] * xx * wc;
+                        ddy += aSVD[1][j] * dd[j] * xx * wc;
+                        ddz += aSVD[2][j] * dd[j] * xx * wc;
+                    }
+                    UpGrad[pointI] += tensor(ddx, ddy, ddz);
+                }
             }
-        }
-        syncTools::syncPointList(mesh, UpGrad, plusEqOp<tensor>(), tensor::zero);
-        forAll(Up, i)
-        {
-            Qp[i] = 0.5 * (sqr(tr(UpGrad[i])) - tr(((UpGrad[i]) & (UpGrad[i]))));
+            syncTools::syncPointList(mesh, UpGrad, plusEqOp<tensor>(), tensor::zero);
         }
 
-        forAll(U, i)
-        {
-            Qc[i] = 0.5 * (sqr(tr(gradUc[i])) - tr(((gradUc[i]) & (gradUc[i]))));
-        }
-        volTensorField S = 0.5 * (gradUc + T(gradUc));
-        volTensorField W = 0.5 * (gradUc - T(gradUc));
-
-        dimensionedScalar maxQc = max(Qc);
-        doubleScalar e = maxQc.value() / 500;
-        forAll(U, i)
-        {
-            OmegaC[i] = magSqr(W[i]) / (magSqr(W[i]) + magSqr(S[i]) + mag(e) + SMALL);
-        }
-
-        pointTensorField Sp = 0.5 * (UpGrad + T(UpGrad));
-        pointTensorField Wp = 0.5 * (UpGrad - T(UpGrad));
-
-        dimensionedScalar maxQp = max(Qp);
-        e = maxQp.value() / 500;
-        forAll(OmegaP, i)
-        {
-            OmegaP[i] = magSqr(Wp[i]) / (magSqr(Wp[i]) + magSqr(Sp[i]) + mag(e) + SMALL);
-        }
-        Qc.correctBoundaryConditions();
-        Qp.correctBoundaryConditions();
-        OmegaC.correctBoundaryConditions();
-        OmegaP.correctBoundaryConditions();
-
-        word header = "X,Y,Z,";
         if(Q_Output)
         {
-            header += "Q,";
-        }
-        if(Omega_Output)
-        {
-            header += "Omega,";
-        }
-        if(U_Output)
-        {
-            header += "Ux,Uy,Uz,magU";
+            forAll(Up, i)
+            {
+                Qp[i] = 0.5 * (sqr(tr(UpGrad[i])) - tr(((UpGrad[i]) & (UpGrad[i]))));
+            }
+
+            forAll(U, i)
+            {
+                Qc[i] = 0.5 * (sqr(tr(gradUc[i])) - tr(((gradUc[i]) & (gradUc[i]))));
+            }
+            Qc.correctBoundaryConditions();
+            Qp.correctBoundaryConditions();
         }
 
-        OFstream outfile(runTime.timeName() + ".txt");
-        outfile << header << endl;
+        if(Omega_Output)
+        {
+            volTensorField S = 0.5 * (gradUc + T(gradUc));
+            volTensorField W = 0.5 * (gradUc - T(gradUc));
+
+            dimensionedScalar maxQc = max(Qc);
+            doubleScalar e = maxQc.value() / 500;
+            forAll(U, i)
+            {
+                OmegaC[i] = magSqr(W[i]) / (magSqr(W[i]) + magSqr(S[i]) + mag(e) + SMALL);
+            }
+
+            pointTensorField Sp = 0.5 * (UpGrad + T(UpGrad));
+            pointTensorField Wp = 0.5 * (UpGrad - T(UpGrad));
+
+            dimensionedScalar maxQp = max(Qp);
+            e = maxQp.value() / 500;
+            forAll(OmegaP, i)
+            {
+                OmegaP[i] = magSqr(Wp[i]) / (magSqr(Wp[i]) + magSqr(Sp[i]) + mag(e) + SMALL);
+            }
+            OmegaC.correctBoundaryConditions();
+            OmegaP.correctBoundaryConditions();
+        }
+
+        // output
+
+        // word header = "X,Y,Z,";
+        // if(Q_Output)
+        // {
+        //     header += "Q,";
+        // }
+        // if(Omega_Output)
+        // {
+        //     header += "Omega,";
+        // }
+        // if(U_Output)
+        // {
+        //     header += "Ux,Uy,Uz,magU";
+        // }
+
+        std::ofstream outfile(runTime.timeName() + ".vtk");
+        // outfile << header << endl;
+
+        if (!outfile.is_open()) 
+        {
+            std::cerr << "Can not open the vtk file." << std::endl;
+            return EXIT_FAILURE;
+        }
+
+
+        outfile << "# vtk DataFile Version 3.0\n";
+        outfile << "CFD simulation data\n";
+        outfile << "ASCII\n";
+        outfile << "DATASET UNSTRUCTURED_GRID\n";
 
         if(Dimension==2)
         {
+            outfile << "POINTS " << numVertex+noe << " double\n";
             for (label i = 0; i < mesh.nPoints() / 2; i++)
             {
                 vector position = mesh.points()[i];
-                
-                outfile << position.x() << "," << position.y() << "," << 0.0 << ",";
+                outfile << position.x() << " " << position.y() << " " << 0.0 << std::endl;
+            }
+            for(label i = 0; i < mesh.nCells(); i++)
+            {
+                vector position = mesh.C()[i];
+                outfile << position.x() << " " << position.y() << " " << 0.0 << std::endl;
+            }
+
+            label cellsEntrySize = 0;
+            forAll(cellPointsType,i)
+            {
+                cellsEntrySize += cellPointsType[i].size();
+            }
+
+            outfile << "CELLS " << numElement << " " << cellsEntrySize << "\n";
+            forAll(cellPointsType,i)
+            {
+                outfile << cellPointsType[i].size()-1;
+                for(label j = 1; j < cellPointsType[i].size(); j++)
+                {
+                    outfile << " " << cellPointsType[i][j];
+                }
+                outfile << "\n";
+            }
+
+            outfile << "CELL_TYPES " << numElement << "\n";
+            forAll(cellPointsType,i)
+            {
+                outfile << cellPointsType[i][0] << "\n";
+            }
+
+            if(Q_Output || Omega_Output || U_Output)
+            {
+                outfile << "POINT_DATA " << numVertex+noe << "\n";
 
                 if (Q_Output)
                 {
-                    outfile << Qp[i] << ",";
+                    outfile << "SCALARS Q double 1\n";
+                    outfile << "LOOKUP_TABLE default\n";
+                    for (label i = 0; i < mesh.nPoints() / 2; i++)
+                    {
+                        outfile << Qp[i] << "\n";
+                    }
+                    for(label i = 0; i < mesh.nCells(); i++)
+                    {
+                        outfile << Qc[i] << "\n";
+                    }
                 }
+
                 if (Omega_Output)
                 {
-                    outfile << OmegaP[i] << ",";
+                    outfile << "SCALARS Omega double 1\n";
+                    outfile << "LOOKUP_TABLE default\n";
+                    for (label i = 0; i < mesh.nPoints() / 2; i++)
+                    {
+                        outfile << OmegaP[i] << "\n";
+                    }
+                    for(label i = 0; i < mesh.nCells(); i++)
+                    {
+                        outfile << OmegaC[i] << "\n";
+                    }
                 }
-                if (U_Output)
+                if(U_Output)
                 {
-                    outfile << Up[i][0] << "," << Up[i][1] << "," << Up[i][2] << "," << mag(Up[i]);
+                    outfile << "VECTORS Velocity double\n";
+                    for (label i = 0; i < mesh.nPoints() / 2; i++)
+                    {
+                        outfile << Up[i][0] << " " << Up[i][1] << " " << Up[i][2] << "\n";
+                    }
+                    for(label i = 0; i < mesh.nCells(); i++)
+                    {
+                        outfile << Ud[i][0] << " " << Ud[i][1] << " " << Ud[i][2] << "\n";
+                    }
                 }
-                outfile << endl;
             }
+            outfile.close();
+            std::cout << "The VTK file has been created successfully: " + runTime.timeName() + ".vtk" << std::endl;
         }
         else if(Dimension==3)
         {
-            forAll(Qp,i)
+            outfile << "POINTS " << numVertex+noe << " double\n";
+            for (label i = 0; i < mesh.nPoints(); i++)
             {
                 vector position = mesh.points()[i];
-                
-                outfile << position.x() << "," << position.y() << "," << position.z() << ",";
+                outfile << position.x() << " " << position.y() << " " << position.z() << std::endl;
+            }
+            for(label i = 0; i < mesh.nCells(); i++)
+            {
+                vector position = mesh.C()[i];
+                outfile << position.x() << " " << position.y() << " " << position.z() << std::endl;
+            }
+
+            label cellsEntrySize = 0;
+            forAll(cellPointsType,i)
+            {
+                cellsEntrySize += cellPointsType[i].size();
+            }
+
+            outfile << "CELLS " << numElement << " " << cellsEntrySize << "\n";
+            forAll(cellPointsType,i)
+            {
+                outfile << cellPointsType[i].size()-1;
+                for(label j = 1; j < cellPointsType[i].size(); j++)
+                {
+                    outfile << " " << cellPointsType[i][j];
+                }
+                outfile << "\n";
+            }
+
+            outfile << "CELL_TYPES " << numElement << "\n";
+            forAll(cellPointsType,i)
+            {
+                outfile << cellPointsType[i][0] << "\n";
+            }
+
+            if(Q_Output || Omega_Output || U_Output)
+            {
+                outfile << "POINT_DATA " << numVertex+noe << "\n";
 
                 if (Q_Output)
                 {
-                    outfile << Qp[i] << ",";
+                    outfile << "SCALARS Q double 1\n";
+                    outfile << "LOOKUP_TABLE default\n";
+                    for (label i = 0; i < mesh.nPoints(); i++)
+                    {
+                        outfile << Qp[i] << "\n";
+                    }
+                    for(label i = 0; i < mesh.nCells(); i++)
+                    {
+                        outfile << Qc[i] << "\n";
+                    }
                 }
+
                 if (Omega_Output)
                 {
-                    outfile << OmegaP[i] << ",";
+                    outfile << "SCALARS Omega double 1\n";
+                    outfile << "LOOKUP_TABLE default\n";
+                    for (label i = 0; i < mesh.nPoints(); i++)
+                    {
+                        outfile << OmegaP[i] << "\n";
+                    }
+                    for(label i = 0; i < mesh.nCells(); i++)
+                    {
+                        outfile << OmegaC[i] << "\n";
+                    }
                 }
-                if (U_Output)
+
+                if(U_Output)
                 {
-                    outfile << Up[i][0] << "," << Up[i][1] << "," << Up[i][2] << "," << mag(Up[i]);
+                    outfile << "VECTORS Velocity double\n";
+                    for (label i = 0; i < mesh.nPoints(); i++)
+                    {
+                        outfile << Up[i][0] << " " << Up[i][1] << " " << Up[i][2] << "\n";
+                    }
+                    for(label i = 0; i < mesh.nCells(); i++)
+                    {
+                        outfile << Ud[i][0] << " " << Ud[i][1] << " " << Ud[i][2] << "\n";
+                    }
                 }
-                outfile << endl;
             }
+            outfile.close();
+            std::cout << "The VTK file has been created successfully: " + runTime.timeName() + ".vtk" << std::endl;
         }
         else
         {
@@ -284,38 +550,6 @@ int main(int argc, char *argv[])
             exit(1);
         }
 
-        forAll(Qc,i)
-        {
-            vector position = mesh.C()[i];
-
-            if(Dimension==2)
-            {
-                outfile << position.x() << "," << position.y() << "," << 0.0 << ",";
-            }
-            else if(Dimension==3)
-            {
-                outfile << position.x() << "," << position.y() << "," << position.z() << ",";
-            }
-            else
-            {
-                WarningInFunction << "The number of dimensions is wrong, it can only be 2D or 3D.";
-                exit(1);
-            }
-            
-            if (Q_Output)
-            {
-                outfile << Qc[i] << ",";
-            }
-            if (Omega_Output)
-            {
-                outfile << OmegaC[i] << ",";
-            }
-            if (U_Output)
-            {
-                outfile << Ud[i][0] << "," << Ud[i][1] << "," << Ud[i][2] << "," << mag(Ud[i]);
-            }
-            outfile << endl;
-        }
     }
 
     Foam::Info << nl << "End" << nl << endl;
