@@ -174,7 +174,7 @@ int main(int argc, char *argv[])
 
                     if(mesh.owner()[faceI] == i)
                     {
-                        reverseArray(pointIndex, 3);
+                        reverseArray(pointIndex, 4);
                     }
 
                     forAll(mesh.faces()[faceI],pi)
