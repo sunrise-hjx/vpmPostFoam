@@ -151,10 +151,10 @@ int main(int argc, char *argv[])
                         pointIndex[pi] = mesh.faces()[faceI][pi];
                     }
 
-                    if(mesh.owner()[faceI] == i)
-                    {
-                        reverseArray(pointIndex, 3);
-                    }
+                    //if(mesh.owner()[faceI] == i)
+                    //{
+                    //    reverseArray(pointIndex, 3);
+                    //}
 
                     forAll(mesh.faces()[faceI],pi)
                     {
@@ -172,10 +172,10 @@ int main(int argc, char *argv[])
                         pointIndex[pi] = mesh.faces()[faceI][pi];
                     }
 
-                    if(mesh.owner()[faceI] == i)
-                    {
-                        reverseArray(pointIndex, 4);
-                    }
+                    //if(mesh.owner()[faceI] == i)
+                    //{
+                    //    reverseArray(pointIndex, 4);
+                    //}
 
                     forAll(mesh.faces()[faceI],pi)
                     {
